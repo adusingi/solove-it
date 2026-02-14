@@ -1,33 +1,53 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs } from "expo-router";
+import { Bell, Compass, Heart, ListChecks } from "lucide-react-native";
+import React from "react";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import Colors from "@/constants/colors";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textTertiary,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarStyle: {
+          backgroundColor: Colors.surface,
+          borderTopColor: Colors.borderLight,
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600" as const,
+        },
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="(home)"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: "ホーム",
+          tabBarIcon: ({ color, size }) => <Heart size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="list"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: "リスト",
+          tabBarIcon: ({ color, size }) => <ListChecks size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="events"
+        options={{
+          title: "イベント",
+          tabBarIcon: ({ color, size }) => <Compass size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "通知設定",
+          tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
         }}
       />
     </Tabs>
