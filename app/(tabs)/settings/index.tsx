@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { Bell, BellOff, BellRing, Clock, Link2, RotateCcw, Shield, Users, Volume2 } from 'lucide-react-native';
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   Alert,
   Pressable,
@@ -17,6 +17,7 @@ import { ANNOYANCE_LABELS, NUDGE_MESSAGES } from '@/constants/categories';
 import Colors from '@/constants/colors';
 import { useWishes } from '@/providers/WishProvider';
 import { sendTestNotification } from '@/services/notificationService';
+import { supabase } from '@/lib/supabase';
 import { AnnoyanceLevel, TimeWindow } from '@/types/wish';
 
 const TIME_WINDOWS: { key: TimeWindow; label: string; time: string; emoji: string }[] = [
@@ -43,6 +44,15 @@ export default function SettingsScreen() {
   const sampleMessage = sampleMessages[0].replace('{title}', sampleTitle);
   const workspaceLabel =
     activeWorkspaceId.length > 20 ? `${activeWorkspaceId.slice(0, 20)}...` : activeWorkspaceId;
+
+  useEffect(() => {
+    const runSupabaseTest = async () => {
+      const { data, error } = await supabase.from('wishes').select('*').limit(5);
+      console.log('SUPABASE TEST', { data, error });
+    };
+
+    runSupabaseTest();
+  }, []);
 
   const handleToggle = useCallback(
     (value: boolean) => {
