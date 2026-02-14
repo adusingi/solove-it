@@ -4,7 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { supabase } from '@/lib/supabase';
 import { SAMPLE_WISHES } from '@/mocks/wishes';
+import {
+  fetchSharedWishesFromSupabase,
+  isSharedWorkspaceId,
+  syncSharedWishesToSupabase,
+} from '@/services/supabaseWishSync';
 import {
   NotificationSettings,
   Wish,
@@ -71,6 +77,17 @@ function parseSnapshot(rawSnapshot: unknown) {
   return undefined;
 }
 
+function parseStoredWishes(raw: string | null): Wish[] {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as Wish[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 function generateWorkspaceId() {
   return `shared-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -130,6 +147,9 @@ export const [WishProvider, useWishes] = createContextHook(() => {
         if (shouldSeedSnapshot) {
           await AsyncStorage.setItem(wishesKey, JSON.stringify(snapshot));
           await AsyncStorage.setItem(initializedKey, 'true');
+          if (workspaceId !== DEFAULT_WORKSPACE_ID && isSharedWorkspaceId(workspaceId)) {
+            await syncSharedWishesToSupabase(workspaceId, snapshot);
+          }
         }
       }
 
@@ -167,12 +187,67 @@ export const [WishProvider, useWishes] = createContextHook(() => {
     });
   }, [currentUrl, workspaceReady, switchWorkspace]);
 
+  useEffect(() => {
+    if (!workspaceReady || activeWorkspaceId === DEFAULT_WORKSPACE_ID || !isSharedWorkspaceId(activeWorkspaceId)) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`wishes-live-${activeWorkspaceId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wishes' }, (payload) => {
+        const raw =
+          payload.new && Object.keys(payload.new as Record<string, unknown>).length > 0
+            ? (payload.new as Record<string, unknown>)
+            : (payload.old as Record<string, unknown> | undefined);
+        const pairId =
+          typeof raw?.pair_id === 'string'
+            ? raw.pair_id
+            : typeof raw?.pairId === 'string'
+              ? raw.pairId
+              : null;
+
+        if (pairId === activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: ['wishes', activeWorkspaceId] });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeWorkspaceId, queryClient, workspaceReady]);
+
+  const shouldAutoRefreshSharedWishes =
+    workspaceReady && activeWorkspaceId !== DEFAULT_WORKSPACE_ID && isSharedWorkspaceId(activeWorkspaceId);
+
   const wishesQuery = useQuery({
     queryKey: ['wishes', activeWorkspaceId],
     enabled: workspaceReady,
+    refetchInterval: shouldAutoRefreshSharedWishes ? 10000 : false,
+    refetchIntervalInBackground: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       const initializedKey = getInitializedKey(activeWorkspaceId);
       const wishesKey = getWishesKey(activeWorkspaceId);
+      const storedRaw = await AsyncStorage.getItem(wishesKey);
+      const storedWishes = parseStoredWishes(storedRaw);
+
+      if (activeWorkspaceId !== DEFAULT_WORKSPACE_ID && isSharedWorkspaceId(activeWorkspaceId)) {
+        const remoteWishes = await fetchSharedWishesFromSupabase(activeWorkspaceId);
+
+        if (remoteWishes) {
+          if (remoteWishes.length > 0 || storedWishes.length === 0) {
+            await AsyncStorage.setItem(wishesKey, JSON.stringify(remoteWishes));
+            await AsyncStorage.setItem(initializedKey, 'true');
+            return remoteWishes;
+          }
+
+          await syncSharedWishesToSupabase(activeWorkspaceId, storedWishes);
+          await AsyncStorage.setItem(initializedKey, 'true');
+          return storedWishes;
+        }
+      }
+
       const initialized = await AsyncStorage.getItem(initializedKey);
 
       if (!initialized) {
@@ -204,8 +279,7 @@ export const [WishProvider, useWishes] = createContextHook(() => {
         return initialWishes;
       }
 
-      const stored = await AsyncStorage.getItem(wishesKey);
-      return stored ? (JSON.parse(stored) as Wish[]) : [];
+      return storedWishes;
     },
   });
 
@@ -232,6 +306,9 @@ export const [WishProvider, useWishes] = createContextHook(() => {
   const { mutate: persistWishesMutate } = useMutation({
     mutationFn: async ({ workspaceId, updated }: { workspaceId: string; updated: Wish[] }) => {
       await AsyncStorage.setItem(getWishesKey(workspaceId), JSON.stringify(updated));
+      if (workspaceId !== DEFAULT_WORKSPACE_ID && isSharedWorkspaceId(workspaceId)) {
+        await syncSharedWishesToSupabase(workspaceId, updated);
+      }
       return { workspaceId, updated };
     },
     onSuccess: (data) => {
