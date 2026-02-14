@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { Check, ChevronRight } from 'lucide-react-native';
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import Colors from '@/constants/colors';
@@ -18,6 +18,11 @@ export default React.memo(function WishCard({ wish, onToggle, onPress }: WishCar
   const checkScale = useRef(new Animated.Value(wish.status === 'done' ? 1 : 0)).current;
   const category = CATEGORY_MAP[wish.category];
   const isDone = wish.status === 'done';
+  const createdDateText = useMemo(() => {
+    const createdAt = new Date(wish.createdAt);
+    if (Number.isNaN(createdAt.getTime())) return '不明';
+    return createdAt.toLocaleDateString('ja-JP');
+  }, [wish.createdAt]);
 
   const handleToggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -77,6 +82,7 @@ export default React.memo(function WishCard({ wish, onToggle, onPress }: WishCar
               {wish.title}
             </Text>
           </View>
+          <Text style={styles.createdAtText}>作成日: {createdDateText}</Text>
 
           <View style={styles.tags}>
             <View style={[styles.tag, { backgroundColor: category?.color + '18' }]}>
@@ -145,7 +151,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   title: {
     fontSize: 15,
@@ -156,6 +162,11 @@ const styles = StyleSheet.create({
   titleDone: {
     textDecorationLine: 'line-through',
     color: Colors.textTertiary,
+  },
+  createdAtText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 6,
   },
   tags: {
     flexDirection: 'row',
