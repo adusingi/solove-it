@@ -13,15 +13,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ProgressBar from '@/components/ProgressBar';
-import Colors from '@/constants/colors';
 import { CATEGORIES, CATEGORY_MAP, PRIORITY_LABELS, SEASON_LABELS } from '@/constants/categories';
+import Colors from '@/constants/colors';
 import { useWishes } from '@/providers/WishProvider';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { stats, nextCandidates, isLoading } = useWishes();
+  const { stats, nextCandidates, isLoading, isSharedWorkspace, activeWorkspaceId } = useWishes();
   const fabScale = useRef(new Animated.Value(1)).current;
+  const workspaceLabel =
+    activeWorkspaceId.length > 14 ? `${activeWorkspaceId.slice(0, 14)}...` : activeWorkspaceId;
 
   const handleFabPress = useCallback(() => {
     Animated.sequence([
@@ -46,8 +48,15 @@ export default function HomeScreen() {
         >
           <View style={styles.header}>
             <View>
-              <Text style={styles.greeting}>ふたりの</Text>
-              <Text style={styles.headerTitle}>やりたいことリスト 💕</Text>
+              <Text style={styles.greeting}>{isSharedWorkspace ? '共有中の' : 'わたしの'}</Text>
+              <View style={styles.headerTitleRow}>
+                <Text style={styles.headerTitle}>やりたいことリスト 💕</Text>
+                {isSharedWorkspace && (
+                  <View style={styles.sharedBadge}>
+                    <Text style={styles.sharedBadgeText}>{workspaceLabel}</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
@@ -211,6 +220,22 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: Colors.text,
     letterSpacing: -0.5,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sharedBadge: {
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  sharedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: Colors.primary,
   },
   heroCard: {
     marginHorizontal: 16,

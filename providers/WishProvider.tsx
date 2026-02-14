@@ -1,7 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import * as Linking from 'expo-linking';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { SAMPLE_WISHES } from '@/mocks/wishes';
 import {
@@ -12,9 +13,13 @@ import {
   WishStatus,
 } from '@/types/wish';
 
-const WISHES_KEY = 'wishes_data';
+const DEFAULT_WORKSPACE_ID = 'shared-main';
+const ACTIVE_WORKSPACE_KEY = 'active_workspace_id';
+const WISHES_KEY_PREFIX = 'wishes_data';
+const LEGACY_WISHES_KEY = 'wishes_data';
 const NOTIF_KEY = 'notification_settings';
-const INITIALIZED_KEY = 'app_initialized';
+const INITIALIZED_KEY_PREFIX = 'app_initialized';
+const LEGACY_INITIALIZED_KEY = 'app_initialized';
 
 const DEFAULT_NOTIFICATION: NotificationSettings = {
   enabled: true,
@@ -23,22 +28,183 @@ const DEFAULT_NOTIFICATION: NotificationSettings = {
   highPriorityOnly: false,
 };
 
+type WorkspaceSwitchOptions = {
+  snapshot?: Wish[];
+};
+
+function getWishesKey(workspaceId: string) {
+  return `${WISHES_KEY_PREFIX}:${workspaceId}`;
+}
+
+function getInitializedKey(workspaceId: string) {
+  return `${INITIALIZED_KEY_PREFIX}:${workspaceId}`;
+}
+
+function normalizeWorkspaceId(workspaceId: string | null | undefined) {
+  if (!workspaceId) return DEFAULT_WORKSPACE_ID;
+  const trimmed = workspaceId.trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_WORKSPACE_ID;
+}
+
+function parseSnapshot(rawSnapshot: unknown) {
+  if (typeof rawSnapshot !== 'string' || !rawSnapshot) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(rawSnapshot) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed as Wish[];
+    }
+  } catch {
+    try {
+      const decoded = decodeURIComponent(rawSnapshot);
+      const parsed = JSON.parse(decoded) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed as Wish[];
+      }
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function generateWorkspaceId() {
+  return `shared-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export const [WishProvider, useWishes] = createContextHook(() => {
   const queryClient = useQueryClient();
+  const currentUrl = Linking.useURL();
+  const handledUrlRef = useRef<string | null>(null);
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(DEFAULT_WORKSPACE_ID);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function bootstrapWorkspace() {
+      try {
+        const storedWorkspaceId = await AsyncStorage.getItem(ACTIVE_WORKSPACE_KEY);
+        if (mounted && storedWorkspaceId) {
+          setActiveWorkspaceId(normalizeWorkspaceId(storedWorkspaceId));
+        }
+      } finally {
+        if (mounted) {
+          setWorkspaceReady(true);
+        }
+      }
+    }
+
+    bootstrapWorkspace();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const switchWorkspace = useCallback(
+    async (workspaceIdInput: string, options?: WorkspaceSwitchOptions) => {
+      const workspaceId = normalizeWorkspaceId(workspaceIdInput);
+      const snapshot = options?.snapshot;
+      const wishesKey = getWishesKey(workspaceId);
+      const initializedKey = getInitializedKey(workspaceId);
+
+      if (snapshot && snapshot.length > 0) {
+        const existing = await AsyncStorage.getItem(wishesKey);
+        let shouldSeedSnapshot = !existing;
+
+        if (existing) {
+          try {
+            const existingWishes = JSON.parse(existing) as unknown;
+            shouldSeedSnapshot = !Array.isArray(existingWishes) || existingWishes.length === 0;
+          } catch {
+            shouldSeedSnapshot = true;
+          }
+        }
+
+        if (shouldSeedSnapshot) {
+          await AsyncStorage.setItem(wishesKey, JSON.stringify(snapshot));
+          await AsyncStorage.setItem(initializedKey, 'true');
+        }
+      }
+
+      await AsyncStorage.setItem(ACTIVE_WORKSPACE_KEY, workspaceId);
+      setActiveWorkspaceId(workspaceId);
+      await queryClient.invalidateQueries({ queryKey: ['wishes', workspaceId] });
+      console.log('[WishProvider] Switched workspace:', workspaceId);
+    },
+    [queryClient],
+  );
+
+  useEffect(() => {
+    if (!workspaceReady || !currentUrl || handledUrlRef.current === currentUrl) {
+      return;
+    }
+
+    const parsed = Linking.parse(currentUrl);
+    const params = parsed.queryParams ?? {};
+    const workspaceParam = params.workspaceId;
+    const snapshotParam = params.snapshot;
+    const parsedWorkspaceId =
+      typeof workspaceParam === 'string' ? workspaceParam : Array.isArray(workspaceParam) ? workspaceParam[0] : null;
+    const snapshotRaw =
+      typeof snapshotParam === 'string' ? snapshotParam : Array.isArray(snapshotParam) ? snapshotParam[0] : null;
+    const snapshot = parseSnapshot(snapshotRaw);
+
+    if (!parsedWorkspaceId) {
+      handledUrlRef.current = currentUrl;
+      return;
+    }
+
+    handledUrlRef.current = currentUrl;
+    switchWorkspace(parsedWorkspaceId, { snapshot }).catch((error: unknown) => {
+      console.warn('[WishProvider] Failed to switch workspace from link', error);
+    });
+  }, [currentUrl, workspaceReady, switchWorkspace]);
 
   const wishesQuery = useQuery({
-    queryKey: ['wishes'],
+    queryKey: ['wishes', activeWorkspaceId],
+    enabled: workspaceReady,
     queryFn: async () => {
-      const initialized = await AsyncStorage.getItem(INITIALIZED_KEY);
+      const initializedKey = getInitializedKey(activeWorkspaceId);
+      const wishesKey = getWishesKey(activeWorkspaceId);
+      const initialized = await AsyncStorage.getItem(initializedKey);
+
       if (!initialized) {
-        await AsyncStorage.setItem(WISHES_KEY, JSON.stringify(SAMPLE_WISHES));
-        await AsyncStorage.setItem(INITIALIZED_KEY, 'true');
-        console.log('[WishProvider] Initialized with sample data');
-        return SAMPLE_WISHES;
+        let initialWishes: Wish[] = [];
+
+        if (activeWorkspaceId === DEFAULT_WORKSPACE_ID) {
+          const legacyWishesRaw = await AsyncStorage.getItem(LEGACY_WISHES_KEY);
+          const legacyInitialized = await AsyncStorage.getItem(LEGACY_INITIALIZED_KEY);
+
+          if (legacyWishesRaw && legacyInitialized) {
+            try {
+              const legacyWishes = JSON.parse(legacyWishesRaw) as Wish[];
+              if (Array.isArray(legacyWishes)) {
+                initialWishes = legacyWishes.map((wish) => ({ ...wish, pairId: DEFAULT_WORKSPACE_ID }));
+              }
+            } catch {
+              initialWishes = [];
+            }
+          }
+
+          if (initialWishes.length === 0) {
+            initialWishes = SAMPLE_WISHES.map((wish) => ({ ...wish, pairId: DEFAULT_WORKSPACE_ID }));
+          }
+        }
+
+        await AsyncStorage.setItem(wishesKey, JSON.stringify(initialWishes));
+        await AsyncStorage.setItem(initializedKey, 'true');
+        console.log('[WishProvider] Initialized workspace:', activeWorkspaceId);
+        return initialWishes;
       }
-      const stored = await AsyncStorage.getItem(WISHES_KEY);
+
+      const stored = await AsyncStorage.getItem(wishesKey);
       return stored ? (JSON.parse(stored) as Wish[]) : [];
     },
   });
@@ -52,10 +218,10 @@ export const [WishProvider, useWishes] = createContextHook(() => {
   });
 
   useEffect(() => {
-    if (wishesQuery.data) {
+    if (workspaceReady && wishesQuery.data) {
       setWishes(wishesQuery.data);
     }
-  }, [wishesQuery.data]);
+  }, [wishesQuery.data, workspaceReady]);
 
   useEffect(() => {
     if (notifQuery.data) {
@@ -64,12 +230,12 @@ export const [WishProvider, useWishes] = createContextHook(() => {
   }, [notifQuery.data]);
 
   const { mutate: persistWishesMutate } = useMutation({
-    mutationFn: async (updated: Wish[]) => {
-      await AsyncStorage.setItem(WISHES_KEY, JSON.stringify(updated));
-      return updated;
+    mutationFn: async ({ workspaceId, updated }: { workspaceId: string; updated: Wish[] }) => {
+      await AsyncStorage.setItem(getWishesKey(workspaceId), JSON.stringify(updated));
+      return { workspaceId, updated };
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['wishes'], data);
+      queryClient.setQueryData(['wishes', data.workspaceId], data.updated);
     },
   });
 
@@ -89,17 +255,17 @@ export const [WishProvider, useWishes] = createContextHook(() => {
       const newWish: Wish = {
         ...wish,
         id: `w-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        pairId: 'pair-1',
-        createdBy: 'user-1',
+        pairId: activeWorkspaceId,
+        createdBy: 'guest',
         createdAt: now,
         updatedAt: now,
       };
       const updated = [newWish, ...wishes];
       setWishes(updated);
-      persistWishesMutate(updated);
+      persistWishesMutate({ workspaceId: activeWorkspaceId, updated });
       console.log('[WishProvider] Added wish:', newWish.title);
     },
-    [wishes, persistWishesMutate],
+    [activeWorkspaceId, wishes, persistWishesMutate],
   );
 
   const updateWish = useCallback(
@@ -108,20 +274,20 @@ export const [WishProvider, useWishes] = createContextHook(() => {
         w.id === id ? { ...w, ...updates, updatedAt: new Date().toISOString() } : w,
       );
       setWishes(updated);
-      persistWishesMutate(updated);
+      persistWishesMutate({ workspaceId: activeWorkspaceId, updated });
       console.log('[WishProvider] Updated wish:', id);
     },
-    [wishes, persistWishesMutate],
+    [activeWorkspaceId, wishes, persistWishesMutate],
   );
 
   const deleteWish = useCallback(
     (id: string) => {
       const updated = wishes.filter((w) => w.id !== id);
       setWishes(updated);
-      persistWishesMutate(updated);
+      persistWishesMutate({ workspaceId: activeWorkspaceId, updated });
       console.log('[WishProvider] Deleted wish:', id);
     },
-    [wishes, persistWishesMutate],
+    [activeWorkspaceId, wishes, persistWishesMutate],
   );
 
   const toggleWishStatus = useCallback(
@@ -179,16 +345,45 @@ export const [WishProvider, useWishes] = createContextHook(() => {
       .slice(0, 3);
   }, [wishes]);
 
+  const isSharedWorkspace = activeWorkspaceId !== DEFAULT_WORKSPACE_ID;
+
+  const createShareLink = useCallback(async () => {
+    const snapshot = JSON.stringify(wishes);
+    const link = Linking.createURL('/', {
+      queryParams: {
+        workspaceId: activeWorkspaceId,
+        snapshot,
+      },
+    });
+    return link;
+  }, [activeWorkspaceId, wishes]);
+
+  const createWorkspace = useCallback(async () => {
+    const workspaceId = generateWorkspaceId();
+    await switchWorkspace(workspaceId);
+    return workspaceId;
+  }, [switchWorkspace]);
+
+  const resetWorkspace = useCallback(async () => {
+    await switchWorkspace(DEFAULT_WORKSPACE_ID);
+  }, [switchWorkspace]);
+
   return {
     wishes,
     notificationSettings,
+    activeWorkspaceId,
+    isSharedWorkspace,
     stats,
     nextCandidates,
-    isLoading: wishesQuery.isLoading,
+    isLoading: wishesQuery.isLoading || !workspaceReady,
     addWish,
     updateWish,
     deleteWish,
     toggleWishStatus,
+    createWorkspace,
+    createShareLink,
+    resetWorkspace,
+    switchWorkspace,
     updateNotificationSettings,
   };
 });

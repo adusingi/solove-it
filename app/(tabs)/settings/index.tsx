@@ -1,9 +1,11 @@
 import * as Haptics from 'expo-haptics';
-import { Bell, BellOff, Clock, Shield, Volume2 } from 'lucide-react-native';
+import { Bell, BellOff, Clock, Link2, RotateCcw, Shield, Users, Volume2 } from 'lucide-react-native';
 import React, { useCallback } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -24,11 +26,22 @@ const TIME_WINDOWS: { key: TimeWindow; label: string; time: string; emoji: strin
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { notificationSettings, updateNotificationSettings, nextCandidates } = useWishes();
+  const {
+    notificationSettings,
+    updateNotificationSettings,
+    nextCandidates,
+    activeWorkspaceId,
+    isSharedWorkspace,
+    createShareLink,
+    createWorkspace,
+    resetWorkspace,
+  } = useWishes();
 
   const sampleTitle = nextCandidates[0]?.title ?? 'やりたいこと';
   const sampleMessages = NUDGE_MESSAGES[notificationSettings.annoyanceLevel] ?? NUDGE_MESSAGES[0];
   const sampleMessage = sampleMessages[0].replace('{title}', sampleTitle);
+  const workspaceLabel =
+    activeWorkspaceId.length > 20 ? `${activeWorkspaceId.slice(0, 20)}...` : activeWorkspaceId;
 
   const handleToggle = useCallback(
     (value: boolean) => {
@@ -60,6 +73,36 @@ export default function SettingsScreen() {
     },
     [updateNotificationSettings],
   );
+
+  const handleShareLink = useCallback(async () => {
+    try {
+      const link = await createShareLink();
+      await Share.share({
+        title: '共有リストリンク',
+        message: `やりたいことリストを共有します\n${link}`,
+      });
+    } catch {
+      Alert.alert('共有に失敗しました', '時間をおいてもう一度お試しください');
+    }
+  }, [createShareLink]);
+
+  const handleCreateWorkspace = useCallback(async () => {
+    try {
+      const newWorkspaceId = await createWorkspace();
+      Alert.alert('新しい共有リストを作成しました', `共有ID: ${newWorkspaceId}`);
+    } catch {
+      Alert.alert('作成に失敗しました', '時間をおいてもう一度お試しください');
+    }
+  }, [createWorkspace]);
+
+  const handleResetWorkspace = useCallback(async () => {
+    try {
+      await resetWorkspace();
+      Alert.alert('切り替えました', '個人リストに戻りました');
+    } catch {
+      Alert.alert('切り替えに失敗しました', '時間をおいてもう一度お試しください');
+    }
+  }, [resetWorkspace]);
 
   return (
     <View style={styles.root}>
@@ -96,6 +139,37 @@ export default function SettingsScreen() {
                 testID="notification-toggle"
               />
             </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>共有リスト</Text>
+          <View style={styles.card}>
+            <View style={styles.workspaceHeader}>
+              <Users size={20} color={Colors.primary} />
+              <View style={styles.workspaceMeta}>
+                <Text style={styles.toggleLabel}>
+                  {isSharedWorkspace ? '共有モード' : '個人モード'}
+                </Text>
+                <Text style={styles.workspaceId}>ID: {workspaceLabel}</Text>
+              </View>
+            </View>
+
+            <Pressable onPress={handleShareLink} style={styles.primaryAction}>
+              <Link2 size={16} color="#fff" />
+              <Text style={styles.primaryActionText}>共有リンクを発行</Text>
+            </Pressable>
+
+            <Pressable onPress={handleCreateWorkspace} style={styles.secondaryAction}>
+              <Text style={styles.secondaryActionText}>新しい共有リストを作る</Text>
+            </Pressable>
+
+            {isSharedWorkspace && (
+              <Pressable onPress={handleResetWorkspace} style={styles.secondaryAction}>
+                <RotateCcw size={14} color={Colors.textSecondary} />
+                <Text style={styles.secondaryActionText}>個人リストに戻る</Text>
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -252,6 +326,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textTertiary,
     marginTop: 2,
+  },
+  workspaceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  workspaceMeta: {
+    flex: 1,
+  },
+  workspaceId: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+  primaryAction: {
+    marginTop: 14,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  primaryActionText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700' as const,
+  },
+  secondaryAction: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.background,
+  },
+  secondaryActionText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
   },
   annoyanceGrid: {
     flexDirection: 'row',

@@ -35,7 +35,9 @@ const STATUS_OPTIONS: { key: FilterStatus; label: string }[] = [
 export default function ListScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { toggleWishStatus } = useWishes();
+  const { toggleWishStatus, isSharedWorkspace, activeWorkspaceId } = useWishes();
+  const workspaceLabel =
+    activeWorkspaceId.length > 18 ? `${activeWorkspaceId.slice(0, 18)}...` : activeWorkspaceId;
 
   const [categoryFilter, setCategoryFilter] = useState<FilterCategory>('all');
   const [priorityFilter, setPriorityFilter] = useState<FilterPriority>('all');
@@ -83,7 +85,10 @@ export default function ListScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.headerTitle}>やりたいことリスト</Text>
+        <View>
+          <Text style={styles.headerTitle}>やりたいことリスト</Text>
+          {isSharedWorkspace && <Text style={styles.workspaceTag}>共有ID: {workspaceLabel}</Text>}
+        </View>
         <View style={styles.headerActions}>
           <Pressable
             onPress={() => setShowFilters(!showFilters)}
@@ -214,6 +219,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800' as const,
     color: Colors.text,
+  },
+  workspaceTag: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: Colors.primary,
+    marginTop: 2,
   },
   headerActions: {
     flexDirection: 'row',
