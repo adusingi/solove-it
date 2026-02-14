@@ -1,5 +1,5 @@
-import { CategoryInfo, WishCategory } from '@/types/wish';
 import Colors from '@/constants/colors';
+import { CategoryInfo, WishCategory } from '@/types/wish';
 
 export const CATEGORIES: CategoryInfo[] = [
   { key: 'anniversary', label: '記念日・イベント', emoji: '🎉', color: Colors.categoryColors.anniversary },
@@ -44,7 +44,7 @@ export const ANNOYANCE_LABELS: Record<number, { label: string; description: stri
   0: { label: '静か', description: '週1回', emoji: '😌' },
   1: { label: '普通', description: '週2回', emoji: '🙂' },
   2: { label: 'しつこい', description: '毎日', emoji: '😤' },
-  3: { label: '鬼', description: '1日2回', emoji: '👹' },
+  3: { label: '鬼', description: '3分に1回', emoji: '👹' },
 };
 
 export const NUDGE_MESSAGES: Record<number, string[]> = {

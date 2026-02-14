@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Bell, BellOff, Clock, Link2, RotateCcw, Shield, Users, Volume2 } from 'lucide-react-native';
+import { Bell, BellOff, BellRing, Clock, Link2, RotateCcw, Shield, Users, Volume2 } from 'lucide-react-native';
 import React, { useCallback } from 'react';
 import {
   Alert,
@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import Colors from '@/constants/colors';
 import { ANNOYANCE_LABELS, NUDGE_MESSAGES } from '@/constants/categories';
+import Colors from '@/constants/colors';
 import { useWishes } from '@/providers/WishProvider';
+import { sendTestNotification } from '@/services/notificationService';
 import { AnnoyanceLevel, TimeWindow } from '@/types/wish';
 
 const TIME_WINDOWS: { key: TimeWindow; label: string; time: string; emoji: string }[] = [
@@ -73,6 +74,16 @@ export default function SettingsScreen() {
     },
     [updateNotificationSettings],
   );
+
+  const handleTestNotification = useCallback(async () => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await sendTestNotification(notificationSettings.annoyanceLevel, sampleTitle);
+      Alert.alert('テスト通知を送信しました', '2秒後に通知が届きます 💌');
+    } catch {
+      Alert.alert('通知の送信に失敗しました', '通知の権限を確認してください');
+    }
+  }, [notificationSettings.annoyanceLevel, sampleTitle]);
 
   const handleShareLink = useCallback(async () => {
     try {
@@ -260,6 +271,13 @@ export default function SettingsScreen() {
                 </View>
                 <Text style={styles.previewText}>{sampleMessage}</Text>
               </View>
+            </View>
+
+            <View style={styles.section}>
+              <Pressable onPress={handleTestNotification} style={styles.testNotifButton}>
+                <BellRing size={18} color="#fff" />
+                <Text style={styles.testNotifText}>テスト通知を送信 🔔</Text>
+              </Pressable>
             </View>
           </>
         )}
@@ -483,5 +501,20 @@ const styles = StyleSheet.create({
     color: Colors.text,
     lineHeight: 22,
     fontWeight: '500' as const,
+  },
+  testNotifButton: {
+    backgroundColor: Colors.accent,
+    borderRadius: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    ...Colors.shadow.medium,
+  },
+  testNotifText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700' as const,
   },
 });

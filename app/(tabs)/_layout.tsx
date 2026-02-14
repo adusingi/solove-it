@@ -3,8 +3,12 @@ import { Bell, Compass, Heart, ListChecks } from "lucide-react-native";
 import React from "react";
 
 import Colors from "@/constants/colors";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useWishes } from "@/providers/WishProvider";
 
 export default function TabLayout() {
+  const { wishes, notificationSettings } = useWishes();
+  useNotifications(wishes, notificationSettings);
   return (
     <Tabs
       screenOptions={{
