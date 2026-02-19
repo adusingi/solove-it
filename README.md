@@ -1,50 +1,89 @@
-# Welcome to your Expo app 👋
+# Expo アプリへようこそ 👋
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+このプロジェクトは [`create-expo-app`](https://www.npmjs.com/package/create-expo-app) で作成された [Expo](https://expo.dev) プロジェクトです。
 
-## Get started
+## 前提条件
 
-1. Install dependencies
+以下のツールが事前にインストールされている必要があります。
+
+| ツール | バージョン | インストール方法 |
+|--------|-----------|-----------------|
+| [Node.js](https://nodejs.org/) | v18 以上推奨 | [公式サイト](https://nodejs.org/)からダウンロード、または [nvm](https://github.com/nvm-sh/nvm) を利用 |
+| [pnpm](https://pnpm.io/) | v8 以上推奨 | `npm install -g pnpm` |
+| [Expo CLI](https://docs.expo.dev/get-started/installation/) | — | `npm install -g expo-cli`（グローバル）、または `npx expo` で都度実行 |
+| [Expo Go](https://expo.dev/go) | 最新版 | 実機テスト用。App Store / Google Play からインストール |
+| [Git](https://git-scm.com/) | — | [公式サイト](https://git-scm.com/)からダウンロード |
+
+## はじめかた
+
+1. リポジトリのクローン
 
    ```bash
-   npm install
+   git clone <リポジトリURL>
+   cd solove-it
    ```
 
-2. Start the app
+2. 依存パッケージのインストール
+
+   ```bash
+   pnpm install
+   ```
+
+2. Option1: アプリを起動する
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Option2: トンネルモードでアプリを起動する
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   同じ Wi-Fi に接続していない端末や、ネットワーク制限のある環境（企業 Wi-Fi・VPN 等）でも実機テストができます。
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+   ```bash
+   npx expo start --tunnel
+   ```
 
-## Get a fresh project
+   > **前提条件**: `@expo/ngrok` が必要です。初回実行時に自動でインストールを促されますが、事前にインストールしておくこともできます。
+   >
+   > ```bash
+   > pnpm add -D @expo/ngrok
+   > ```
 
-When you're ready, run:
+   **トンネルモードの特徴**:
+   - [ngrok](https://ngrok.com/) を使い、ローカルの開発サーバーをインターネット経由で公開します
+   - 開発 PC と実機が同じネットワークにいなくても接続できます
+   - 表示される QR コードを Expo Go アプリで読み取るだけで実機確認が可能です
+   - LAN モード (`npx expo start`) よりレイテンシが大きくなる場合があります
+
+起動後の出力から、以下の方法でアプリを開くことができます。
+
+- [開発ビルド](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android エミュレーター](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS シミュレーター](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go) — Expo アプリ開発を手軽に試せるサンドボックス環境
+
+**app** ディレクトリ内のファイルを編集して開発を始められます。このプロジェクトは[ファイルベースルーティング](https://docs.expo.dev/router/introduction)を使用しています。
+
+## プロジェクトをリセットする
+
+準備ができたら、以下のコマンドを実行してください。
 
 ```bash
 npm run reset-project
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+このコマンドはスターターコードを **app-example** ディレクトリに移動し、空の **app** ディレクトリを作成します。そこから新たに開発を始められます。
 
-## Learn more
+## もっと詳しく
 
-To learn more about developing your project with Expo, look at the following resources:
+Expo を使った開発について詳しくは、以下のリソースをご覧ください。
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- [Expo ドキュメント](https://docs.expo.dev/) — 基礎から学べるほか、[ガイド](https://docs.expo.dev/guides)で応用的なトピックも扱っています。
+- [Expo チュートリアル](https://docs.expo.dev/tutorial/introduction/) — Android・iOS・Web で動作するプロジェクトをステップバイステップで作成できます。
 
-## Join the community
+## コミュニティに参加する
 
-Join our community of developers creating universal apps.
+ユニバーサルアプリを開発する開発者コミュニティに参加しましょう。
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [Expo on GitHub](https://github.com/expo/expo) — オープンソースプラットフォームの閲覧・コントリビュート。
+- [Discord コミュニティ](https://chat.expo.dev) — Expo ユーザーとのチャットや質問。
